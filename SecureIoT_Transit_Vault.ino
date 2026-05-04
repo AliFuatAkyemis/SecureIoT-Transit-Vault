@@ -12,6 +12,7 @@
 #include <MFRC522.h>
 #include <MPU6050_tockn.h>
 #include <ESP32Servo.h>
+#include <Preferences.h>
 
 // ── Pin Definitions ────────────────────────────────────────────────
 #define PIN_SDA       21
@@ -39,10 +40,14 @@
 #define SERVO_OPEN    90
 
 // ── Authorized UIDs ────────────────────────────────────────────────
-// Add your card UID strings here after reading from Serial Monitor.
-// Example: "A1 B2 C3 D4"
-const String AUTHORIZED_UIDS[] = {"33 E1 F0 21"};
-const int    AUTHORIZED_COUNT  = sizeof(AUTHORIZED_UIDS) / sizeof(AUTHORIZED_UIDS[0]);
+// Master UID: always authorized, not deletable. Change here if needed.
+const String MASTER_UID = "33 E1 F0 21";
+
+// One additional UID persisted in NVS. Loaded at boot.
+String enrolledUID;
+bool hasEnrolled = false;
+
+Preferences prefs;
 
 // ── Objects ────────────────────────────────────────────────────────
 Adafruit_SSD1306 oled(SCREEN_W, SCREEN_H, &Wire, -1);
@@ -74,6 +79,8 @@ void triggerAlarm();
 void readMotion();
 void readRFID();
 void updateOLED();
+void loadEnrolled();
+void saveEnrolled(const String &uid);
 bool isAuthorized(const String &uid);
 
 // ══════════════════════════════════════════════════════════════════
@@ -97,6 +104,8 @@ void setup() {
   ArduinoCloud.begin(ArduinoIoTPreferredConnection);
   setDebugMessageLevel(2);
   ArduinoCloud.printDebugInfo();
+
+  loadEnrolled();
 
   lockVault();
   Serial.println("[BOOT] Ready.");
@@ -245,18 +254,18 @@ void readRFID() {
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
 
-  if (authorized) {
-    if (lockStatus) {
-      Serial.println("[RFID] AUTHORIZED — locking & resetting");
-      lockVault();
-      alarmActive = false;
-      denyBuzzerUntil = 0;
-      digitalWrite(PIN_BUZZER, LOW);
-      lastDisturbance = 0;
-    } else {
-      Serial.println("[RFID] AUTHORIZED — unlocking");
-      unlockVault();
-    }
+  if (lockStatus) {
+    // Unlocked: enroll this card and lock
+    Serial.println("[RFID] ENROLL — saving new UID");
+    saveEnrolled(uid);
+    lockVault();
+    alarmActive = false;
+    denyBuzzerUntil = 0;
+    digitalWrite(PIN_BUZZER, LOW);
+    lastDisturbance = 0;
+  } else if (authorized) {
+    Serial.println("[RFID] AUTHORIZED — unlocking");
+    unlockVault();
   } else {
     Serial.println("[RFID] UNAUTHORIZED — 3s buzzer");
     digitalWrite(PIN_BUZZER, HIGH);
@@ -264,11 +273,47 @@ void readRFID() {
   }
 }
 
-bool isAuthorized(const String &uid) {
-  for (int i = 0; i < AUTHORIZED_COUNT; i++) {
-    if (AUTHORIZED_UIDS[i] == uid) return true;
+void loadEnrolled() {
+  prefs.begin("vault", true);
+  enrolledUID = prefs.getString("uid", "");
+  hasEnrolled = (enrolledUID.length() > 0);
+
+  // Backward compat: old multi-uid array → migrate first entry to single key
+  if (!hasEnrolled && prefs.isKey("uid_0")) {
+    enrolledUID = prefs.getString("uid_0", "");
+    hasEnrolled = (enrolledUID.length() > 0);
+    // Persist in new single-key format
+    if (hasEnrolled) {
+      prefs.end();
+      prefs.begin("vault", false);
+      prefs.putString("uid", enrolledUID);
+      prefs.end();
+      Serial.println("[ENROLL] Migrated uid_0 → single uid key");
+    }
   }
-  return false;
+
+  prefs.end();
+  if (hasEnrolled) {
+    Serial.print("[ENROLL] Loaded UID from NVS: ");
+    Serial.println(enrolledUID);
+  } else {
+    Serial.println("[ENROLL] No UID stored in NVS");
+  }
+}
+
+void saveEnrolled(const String &uid) {
+  prefs.begin("vault", false);
+  prefs.putString("uid", uid);
+  prefs.end();
+  enrolledUID = uid;
+  hasEnrolled = true;
+  Serial.print("[ENROLL] Stored UID: ");
+  Serial.println(uid);
+}
+
+bool isAuthorized(const String &uid) {
+  if (uid == MASTER_UID) return true;
+  return (hasEnrolled && enrolledUID == uid);
 }
 
 // ── OLED display ───────────────────────────────────────────────────
@@ -349,3 +394,5 @@ void onAlarmResetChange() {
     alarmReset = false;
   }
 }
+
+// onEnrollModeChange removed — enrollMode cloud var retired
