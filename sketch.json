@@ -1,0 +1,43 @@
+{
+  "cpu": {
+    "fqbn": "esp32:esp32:esp32doit-devkit-v1",
+    "name": "",
+    "type": "serial"
+  },
+  "secrets": [
+    {
+      "name": "SECRET_DEVICE_KEY",
+      "value": ""
+    },
+    {
+      "name": "SECRET_OPTIONAL_PASS",
+      "value": ""
+    },
+    {
+      "name": "SECRET_SSID",
+      "value": ""
+    }
+  ],
+  "included_libs": [
+    {
+      "name": "Adafruit SSD1306",
+      "version": "2.5.10"
+    },
+    {
+      "name": "Adafruit GFX Library",
+      "version": "1.11.9"
+    },
+    {
+      "name": "MFRC522",
+      "version": "1.4.10"
+    },
+    {
+      "name": "MPU6050_tockn",
+      "version": "1.0.2"
+    },
+    {
+      "name": "ESP32Servo",
+      "version": "0.13.0"
+    }
+  ]
+}

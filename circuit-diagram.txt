@@ -1,0 +1,40 @@
+SecureIoT Transit Vault — Pin Bağlantıları
+Board: ESP32 DOIT DevKit V1
+
+── OLED SSD1306 (I2C @ 0x3C) ──
+  VCC  → 3V3
+  GND  → GND
+  SDA  → GPIO 21
+  SCL  → GPIO 22
+
+── MPU-6050 (I2C, OLED ile paylaşımlı bus) ──
+  VCC  → 3V3
+  GND  → GND
+  SDA  → GPIO 21
+  SCL  → GPIO 22
+  (AD0 → GND, adres 0x68)
+
+── MFRC522 RFID (SPI — custom pins, GPIO23/18/19 defective) ──
+  3.3V → 3V3   (5V VERME — modül yanar)
+  GND  → GND
+  SDA/SS → GPIO 5
+  SCK    → GPIO 14
+  MOSI   → GPIO 32
+  MISO   → GPIO 25
+  RST    → GPIO 4
+  IRQ    → bağlanmaz
+
+── Servo (vault kilit) ──
+  Sinyal → GPIO 13
+  VCC    → 5V (harici 5V önerilir, yüksek akım)
+  GND    → GND (ESP32 GND ile ortak)
+
+── Buzzer (alarm) ──
+  VDD    → 5V
+  GND    → GND
+  Signal → GPIO 12
+
+── Güç Notları ──
+  • OLED, MPU, RFID = 3V3
+  • Servo = 5V (USB veya harici)
+  • Tüm GND ortak hat
