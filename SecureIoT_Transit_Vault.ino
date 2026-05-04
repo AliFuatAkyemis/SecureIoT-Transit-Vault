@@ -1,6 +1,10 @@
 #include "arduino_secrets.h"
 #include "thingProperties.h"
 
+#include "esp_system.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
@@ -71,8 +75,10 @@ bool isAuthorized(const String &uid);
 
 // ══════════════════════════════════════════════════════════════════
 void setup() {
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   Serial.begin(115200);
   delay(1500);
+  Serial.printf("[BOOT] Reset reason: %d\n", esp_reset_reason());
   Serial.println("[BOOT] SecureIoT Transit Vault starting...");
 
   initRFID();
@@ -220,15 +226,17 @@ void readRFID() {
   Serial.print("[RFID] Card UID: ");
   Serial.println(uid);
 
-  if (isAuthorized(uid)) {
+  bool authorized = isAuthorized(uid);
+
+  rfid.PICC_HaltA();
+  rfid.PCD_StopCrypto1();
+
+  if (authorized) {
     Serial.println("[RFID] AUTHORIZED — unlocking");
     unlockVault();
   } else {
     Serial.println("[RFID] UNAUTHORIZED");
   }
-
-  rfid.PICC_HaltA();
-  rfid.PCD_StopCrypto1();
 }
 
 bool isAuthorized(const String &uid) {
