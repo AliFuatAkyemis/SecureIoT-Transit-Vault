@@ -324,8 +324,18 @@ void onRemoteUnlockChange() {
   Serial.print("[CLOUD] remoteUnlock = ");
   Serial.println(remoteUnlock);
   if (remoteUnlock) {
-    unlockVault();
-    remoteUnlock = false;  // auto-reset so next press triggers again
+    if (lockStatus) {
+      Serial.println("[CLOUD] REMOTE — locking & resetting");
+      lockVault();
+      alarmActive = false;
+      denyBuzzerUntil = 0;
+      digitalWrite(PIN_BUZZER, LOW);
+      lastDisturbance = 0;
+    } else {
+      Serial.println("[CLOUD] REMOTE — unlocking");
+      unlockVault();
+    }
+    remoteUnlock = false;
   }
 }
 
