@@ -58,6 +58,9 @@ unsigned long lastOLED        = 0;
 const unsigned long OLED_INTERVAL = 500;
 float prevAngleX              = 0.0f;
 unsigned long lastMotionTime  = 0;
+unsigned long denyBuzzerUntil = 0;
+unsigned long lastRFIDRead    = 0;
+const unsigned long RFID_DEBOUNCE_MS = 2000;
 
 // ── Forward declarations ───────────────────────────────────────────
 void initOLED();
@@ -103,6 +106,11 @@ void loop() {
   ArduinoCloud.update();
   readMotion();
   readRFID();
+
+  if (denyBuzzerUntil != 0 && millis() >= denyBuzzerUntil) {
+    denyBuzzerUntil = 0;
+    if (!alarmActive) digitalWrite(PIN_BUZZER, LOW);
+  }
 
   if (millis() - lastOLED >= OLED_INTERVAL) {
     lastOLED = millis();
@@ -213,6 +221,12 @@ void readMotion() {
 // ── RFID reading ───────────────────────────────────────────────────
 void readRFID() {
   if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) return;
+  if (millis() - lastRFIDRead < RFID_DEBOUNCE_MS) {
+    rfid.PICC_HaltA();
+    rfid.PCD_StopCrypto1();
+    return;
+  }
+  lastRFIDRead = millis();
 
   String uid = "";
   for (byte i = 0; i < rfid.uid.size; i++) {
@@ -232,10 +246,21 @@ void readRFID() {
   rfid.PCD_StopCrypto1();
 
   if (authorized) {
-    Serial.println("[RFID] AUTHORIZED — unlocking");
-    unlockVault();
+    if (lockStatus) {
+      Serial.println("[RFID] AUTHORIZED — locking & resetting");
+      lockVault();
+      alarmActive = false;
+      denyBuzzerUntil = 0;
+      digitalWrite(PIN_BUZZER, LOW);
+      lastDisturbance = 0;
+    } else {
+      Serial.println("[RFID] AUTHORIZED — unlocking");
+      unlockVault();
+    }
   } else {
-    Serial.println("[RFID] UNAUTHORIZED");
+    Serial.println("[RFID] UNAUTHORIZED — 3s buzzer");
+    digitalWrite(PIN_BUZZER, HIGH);
+    denyBuzzerUntil = millis() + 3000;
   }
 }
 
