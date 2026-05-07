@@ -317,49 +317,88 @@ bool isAuthorized(const String &uid) {
 }
 
 // ── OLED display ───────────────────────────────────────────────────
+
+// 3-bar WiFi icon, 10x8px
+static void drawWifiIcon(int x, int y, bool connected) {
+  if (!connected) {
+    oled.drawLine(x, y + 1, x + 8, y + 7, SSD1306_WHITE);
+    oled.drawLine(x, y + 7, x + 8, y + 1, SSD1306_WHITE);
+    return;
+  }
+  oled.fillRect(x,     y + 5, 2, 3, SSD1306_WHITE);
+  oled.fillRect(x + 3, y + 3, 2, 5, SSD1306_WHITE);
+  oled.fillRect(x + 6, y + 1, 2, 7, SSD1306_WHITE);
+}
+
+// Padlock icon, 8x8px
+static void drawLockIcon(int x, int y, bool unlocked) {
+  if (unlocked) {
+    // Open shackle — left post only
+    oled.drawLine(x + 1, y + 4, x + 1, y + 1, SSD1306_WHITE);
+    oled.drawLine(x + 1, y + 1, x + 5, y + 1, SSD1306_WHITE);
+  } else {
+    // Closed shackle
+    oled.drawLine(x + 1, y + 4, x + 1, y + 2, SSD1306_WHITE);
+    oled.drawLine(x + 1, y + 2, x + 5, y + 2, SSD1306_WHITE);
+    oled.drawLine(x + 5, y + 2, x + 5, y + 4, SSD1306_WHITE);
+  }
+  oled.fillRect(x, y + 4, 7, 4, SSD1306_WHITE);
+  oled.drawPixel(x + 3, y + 5, SSD1306_BLACK);
+  oled.drawPixel(x + 3, y + 7, SSD1306_BLACK);
+}
+
 void updateOLED() {
   oled.clearDisplay();
-
-  // Top bar — Wi-Fi status + cloud time
   oled.setTextSize(1);
-  oled.setCursor(0, 0);
+
+  // ── Top bar (y=0..8) ───────────────────────────────────────────────
   bool wifiOk = (WiFi.status() == WL_CONNECTED);
-  oled.print(wifiOk ? "WiFi:OK" : "WiFi:--");
+  drawWifiIcon(0, 0, wifiOk);
 
   auto t = ArduinoCloud.getLocalTime();
   if (t != 0) {
     struct tm *tm_info = localtime((time_t *)&t);
-    char timeBuf[9];
-    strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", tm_info);
-    oled.setCursor(72, 0);
+    char timeBuf[9];                              // "HH:MM" = 5 chars, 30px
+    time_t localT = (time_t)t + 3 * 3600;          // UTC+3 Turkey
+    tm_info = localtime(&localT);
+    strftime(timeBuf, sizeof(timeBuf), "%H:%M", tm_info);
+    oled.setCursor(49, 1);                        // center: (128-30)/2 ≈ 49
     oled.print(timeBuf);
   }
 
-  // Divider
-  oled.drawLine(0, 9, SCREEN_W - 1, 9, SSD1306_WHITE);
+  drawLockIcon(120, 0, lockStatus);
 
-  // Middle — status
+  oled.drawLine(0, 10, SCREEN_W - 1, 10, SSD1306_WHITE);
+
+  // ── Center prompt (size 2, 12px/char wide, 16px tall) ─────────────
+  // Max chars per line at size 2: 128/12 = 10
   oled.setTextSize(2);
-  oled.setCursor(4, 18);
   if (alarmActive) {
+    // "! ALARM !" = 9 chars = 108px → x=10
+    oled.setCursor(10, 22);
     oled.print("! ALARM !");
   } else if (lockStatus) {
+    // "UNLOCKED" = 8 chars = 96px → x=16
+    oled.setCursor(16, 22);
     oled.print("UNLOCKED");
   } else {
+    // "LOCKED" = 6 chars = 72px → x=28
+    oled.setCursor(28, 22);
     oled.print("LOCKED");
   }
 
-  // Bottom — sensor values
+  // ── Bottom readout (size 1, 6px/char wide) ────────────────────────
   oled.setTextSize(1);
-  oled.setCursor(0, 48);
-  oled.print("Tilt:");
-  oled.print(angle, 1);
-  oled.print((char)247);  // degree symbol
+  oled.drawLine(0, 46, SCREEN_W - 1, 46, SSD1306_WHITE);
 
-  oled.setCursor(0, 57);
-  oled.print("G:   ");
-  oled.print(gForce, 2);
-  oled.print("g");
+  // Sensor row: "Tilt:0.00G" left, "Ang:0.0°" right
+  char gBuf[11], aBuf[11];
+  snprintf(gBuf, sizeof(gBuf), "Tilt:%.2fG", gForce);
+  snprintf(aBuf, sizeof(aBuf), "Ang:%.1f%c", angle, '\xF7');
+  oled.setCursor(0, 53);
+  oled.print(gBuf);
+  oled.setCursor(SCREEN_W - (int)strlen(aBuf) * 6, 53);
+  oled.print(aBuf);
 
   oled.display();
 }
