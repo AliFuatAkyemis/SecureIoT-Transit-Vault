@@ -55,6 +55,14 @@ MFRC522          rfid(PIN_RFID_SS, PIN_RFID_RST);
 MPU6050          mpu(Wire);
 Servo            vaultServo;
 
+// ── Stats accumulators ─────────────────────────────────────────────
+double   shakeSum = 0, tiltAbsSum = 0, tiltRelSum = 0;
+float    shakeMaxV = 0, tiltAbsMaxV = 0, tiltRelMaxV = 0;
+uint32_t statSamples = 0;
+float    baselineAngle = 0.0f;
+unsigned long lastStatsPublish = 0;
+const unsigned long STATS_PUBLISH_MS = 1000;
+
 // ── State ──────────────────────────────────────────────────────────
 bool alarmActive              = false;
 unsigned long lastDisturbance = 0;
@@ -82,6 +90,9 @@ void updateOLED();
 void loadEnrolled();
 void saveEnrolled(const String &uid);
 bool isAuthorized(const String &uid);
+String normalizeUid(const String &input);
+void onStatsResetChange();
+void resetStats();
 
 // ══════════════════════════════════════════════════════════════════
 void setup() {
@@ -108,6 +119,9 @@ void setup() {
   loadEnrolled();
 
   lockVault();
+  mpu.update();
+  baselineAngle = mpu.getAccAngleX();
+  Serial.printf("[STATS] Baseline angle: %.2f\n", baselineAngle);
   Serial.println("[BOOT] Ready.");
 }
 
@@ -172,7 +186,9 @@ void initBuzzer() {
 void lockVault() {
   vaultServo.write(SERVO_LOCKED);
   lockStatus = false;
+  baselineAngle = prevAngleX;
   Serial.println("[LOCK] Vault LOCKED");
+  Serial.printf("[STATS] Baseline reset to: %.2f\n", baselineAngle);
 }
 
 void unlockVault() {
@@ -224,6 +240,29 @@ void readMotion() {
     alarmActive = false;
     digitalWrite(PIN_BUZZER, LOW);
     Serial.println("[ALARM] Auto-cleared — MPU stable 5s");
+  }
+
+  // ── Stats accumulation ────────────────────────────────────────────
+  float tiltAbs = fabsf(angle);
+  float tiltRel = fabsf(angle - baselineAngle);
+
+  shakeSum   += gForce;
+  tiltAbsSum += tiltAbs;
+  tiltRelSum += tiltRel;
+  statSamples++;
+
+  if (gForce   > shakeMaxV)   shakeMaxV   = gForce;
+  if (tiltAbs  > tiltAbsMaxV) tiltAbsMaxV = tiltAbs;
+  if (tiltRel  > tiltRelMaxV) tiltRelMaxV = tiltRel;
+
+  if (millis() - lastStatsPublish >= STATS_PUBLISH_MS && statSamples > 0) {
+    lastStatsPublish = millis();
+    shakeAvg   = (float)(shakeSum   / statSamples);
+    tiltAbsAvg = (float)(tiltAbsSum / statSamples);
+    tiltRelAvg = (float)(tiltRelSum / statSamples);
+    shakeMax   = shakeMaxV;
+    tiltAbsMax = tiltAbsMaxV;
+    tiltRelMax = tiltRelMaxV;
   }
 }
 
@@ -432,6 +471,67 @@ void onAlarmResetChange() {
     Serial.println("[ALARM] Buzzer reset by cloud");
     alarmReset = false;
   }
+}
+
+// ── UID normalization ──────────────────────────────────────────────
+// Accepts "a1b2c3d4", "A1:B2:C3:D4", "a1 b2 c3 d4", etc.
+// Returns "A1 B2 C3 D4" on success, "" on invalid input.
+String normalizeUid(const String &input) {
+  String hex = "";
+  for (int i = 0; i < (int)input.length(); i++) {
+    char c = input[i];
+    if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+      hex += (char)toupper(c);
+    }
+  }
+  // Must be 4, 7, or 10 bytes (8, 14, 20 hex chars — common RFID sizes)
+  if (hex.length() != 8 && hex.length() != 14 && hex.length() != 20) return "";
+  String result = "";
+  for (int i = 0; i < (int)hex.length(); i += 2) {
+    if (i > 0) result += " ";
+    result += hex.substring(i, i + 2);
+  }
+  return result;
+}
+
+void resetStats() {
+  shakeSum = tiltAbsSum = tiltRelSum = 0;
+  shakeMaxV = tiltAbsMaxV = tiltRelMaxV = 0;
+  statSamples = 0;
+  baselineAngle = prevAngleX;
+  Serial.printf("[STATS] Reset — new baseline: %.2f\n", baselineAngle);
+}
+
+void onStatsResetChange() {
+  if (statsReset) {
+    resetStats();
+    statsReset = false;
+  }
+}
+
+void onAuthorizedUidInputChange() {
+  String input = authorizedUidInput;
+  input.trim();
+  if (input.length() == 0) return;
+
+  // lockStatus==true means UNLOCKED — reject enrollment while open
+  if (lockStatus) {
+    Serial.println("[ENROLL] Rejected — vault is UNLOCKED");
+    authorizedUidInput = "";
+    return;
+  }
+
+  String normalized = normalizeUid(input);
+  if (normalized.length() == 0) {
+    Serial.println("[ENROLL] Rejected — invalid UID format");
+    authorizedUidInput = "";
+    return;
+  }
+
+  Serial.print("[ENROLL] Cloud enroll new UID: ");
+  Serial.println(normalized);
+  saveEnrolled(normalized);
+  authorizedUidInput = "";
 }
 
 // onEnrollModeChange removed — enrollMode cloud var retired

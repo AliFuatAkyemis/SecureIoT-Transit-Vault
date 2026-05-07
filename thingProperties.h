@@ -18,22 +18,43 @@ bool    lockStatus;
 String  rfidUID;
 bool    remoteUnlock;
 bool    alarmReset;
+String  authorizedUidInput;
+
+// Stats variables (READ-only telemetry)
+float   shakeAvg;
+float   shakeMax;
+float   tiltAbsAvg;
+float   tiltAbsMax;
+float   tiltRelAvg;
+float   tiltRelMax;
+bool    statsReset;
 
 // Callbacks — defined in .ino
 void onRemoteUnlockChange();
 void onAlarmResetChange();
+void onAuthorizedUidInputChange();
+void onStatsResetChange();
 
 void initProperties() {
   ArduinoCloud.setBoardId(DEVICE_LOGIN_NAME);
   ArduinoCloud.setSecretDeviceKey(DEVICE_KEY);
 
-  ArduinoCloud.addProperty(angle,        READ,  ON_CHANGE);
-  ArduinoCloud.addProperty(gForce,       READ,  ON_CHANGE);
-  ArduinoCloud.addProperty(gyroRate,     READ,  ON_CHANGE);
-  ArduinoCloud.addProperty(lockStatus,   READ,  ON_CHANGE);
-  ArduinoCloud.addProperty(rfidUID,      READ,  ON_CHANGE);
-  ArduinoCloud.addProperty(remoteUnlock, READWRITE, ON_CHANGE, onRemoteUnlockChange);
-  ArduinoCloud.addProperty(alarmReset,   READWRITE, ON_CHANGE, onAlarmResetChange);
+  ArduinoCloud.addProperty(angle,               READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(gForce,              READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(gyroRate,            READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(lockStatus,          READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(rfidUID,             READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(remoteUnlock,        READWRITE, ON_CHANGE, onRemoteUnlockChange);
+  ArduinoCloud.addProperty(alarmReset,          READWRITE, ON_CHANGE, onAlarmResetChange);
+  ArduinoCloud.addProperty(authorizedUidInput,  READWRITE, ON_CHANGE, onAuthorizedUidInputChange);
+
+  ArduinoCloud.addProperty(shakeAvg,    READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(shakeMax,    READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(tiltAbsAvg,  READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(tiltAbsMax,  READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(tiltRelAvg,  READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(tiltRelMax,  READ,      ON_CHANGE);
+  ArduinoCloud.addProperty(statsReset,  READWRITE, ON_CHANGE, onStatsResetChange);
 }
 
 WiFiConnectionHandler ArduinoIoTPreferredConnection(SSID, PASS);
