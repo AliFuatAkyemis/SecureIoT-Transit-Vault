@@ -41,7 +41,7 @@
 
 // ── Authorized UIDs ────────────────────────────────────────────────
 // Master UID: always authorized, not deletable. Change here if needed.
-const String MASTER_UID = "33 E1 F0 21";
+const String MASTER_UID = "B9 2A 2D 40";
 
 // One additional UID persisted in NVS. Loaded at boot.
 String enrolledUID;
@@ -65,7 +65,7 @@ float prevAngleX              = 0.0f;
 unsigned long lastMotionTime  = 0;
 unsigned long denyBuzzerUntil = 0;
 unsigned long lastRFIDRead    = 0;
-const unsigned long RFID_DEBOUNCE_MS = 2000;
+const unsigned long RFID_DEBOUNCE_MS = 1000;
 
 // ── Forward declarations ───────────────────────────────────────────
 void initOLED();
@@ -267,9 +267,9 @@ void readRFID() {
     Serial.println("[RFID] AUTHORIZED — unlocking");
     unlockVault();
   } else {
-    Serial.println("[RFID] UNAUTHORIZED — 3s buzzer");
+    Serial.println("[RFID] UNAUTHORIZED — 1s buzzer");
     digitalWrite(PIN_BUZZER, HIGH);
-    denyBuzzerUntil = millis() + 3000;
+    denyBuzzerUntil = millis() + 1000;
   }
 }
 
@@ -346,7 +346,7 @@ void updateOLED() {
   } else if (lockStatus) {
     oled.print("UNLOCKED");
   } else {
-    oled.print("SCAN CARD");
+    oled.print("LOCKED");
   }
 
   // Bottom — sensor values
