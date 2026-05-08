@@ -233,7 +233,7 @@ void readMotion() {
 
   if (impactG || impactAngle) {
     lastDisturbance = millis();
-    triggerAlarm();
+    if (!lockStatus) triggerAlarm();
     if (impactG)     Serial.printf("[MOTION] Dynamic G=%.2f\n", gForce);
     if (impactAngle) Serial.printf("[MOTION] GyroRate=%.1f deg/s\n", gyroRate);
   } else if (alarmActive && (millis() - lastDisturbance > AUTO_CLEAR_MS)) {
