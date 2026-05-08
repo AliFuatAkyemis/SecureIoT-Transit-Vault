@@ -84,6 +84,7 @@ void initBuzzer();
 void lockVault();
 void unlockVault();
 void triggerAlarm();
+void resetAlarmState();
 void readMotion();
 void readRFID();
 void updateOLED();
@@ -118,7 +119,7 @@ void setup() {
 
   loadEnrolled();
 
-  lockVault();
+  unlockVault();
   mpu.update();
   baselineAngle = mpu.getAccAngleX();
   Serial.printf("[STATS] Baseline angle: %.2f\n", baselineAngle);
@@ -194,6 +195,7 @@ void lockVault() {
 void unlockVault() {
   vaultServo.write(SERVO_OPEN);
   lockStatus = true;
+  resetAlarmState();
   Serial.println("[LOCK] Vault UNLOCKED");
 }
 
@@ -204,6 +206,13 @@ void triggerAlarm() {
     digitalWrite(PIN_BUZZER, HIGH);
     Serial.println("[ALARM] Impact/Tilt detected — buzzer ON");
   }
+}
+
+void resetAlarmState() {
+  alarmActive = false;
+  denyBuzzerUntil = 0;
+  lastDisturbance = 0;
+  digitalWrite(PIN_BUZZER, LOW);
 }
 
 // ── Motion reading ─────────────────────────────────────────────────
@@ -298,10 +307,7 @@ void readRFID() {
     Serial.println("[RFID] ENROLL — saving new UID");
     saveEnrolled(uid);
     lockVault();
-    alarmActive = false;
-    denyBuzzerUntil = 0;
-    digitalWrite(PIN_BUZZER, LOW);
-    lastDisturbance = 0;
+    resetAlarmState();
   } else if (authorized) {
     Serial.println("[RFID] AUTHORIZED — unlocking");
     unlockVault();
@@ -449,12 +455,9 @@ void onRemoteUnlockChange() {
     if (lockStatus) {
       Serial.println("[CLOUD] REMOTE — locking & resetting");
       lockVault();
-      alarmActive = false;
-      denyBuzzerUntil = 0;
-      digitalWrite(PIN_BUZZER, LOW);
-      lastDisturbance = 0;
+      resetAlarmState();
     } else {
-      Serial.println("[CLOUD] REMOTE — unlocking");
+      Serial.println("[CLOUD] REMOTE — unlocking & resetting alarm");
       unlockVault();
     }
     remoteUnlock = false;
@@ -465,8 +468,7 @@ void onAlarmResetChange() {
   Serial.print("[CLOUD] alarmReset = ");
   Serial.println(alarmReset);
   if (alarmReset) {
-    alarmActive = false;
-    digitalWrite(PIN_BUZZER, LOW);
+    resetAlarmState();
     Serial.println("[ALARM] Buzzer reset by cloud");
     alarmReset = false;
   }
