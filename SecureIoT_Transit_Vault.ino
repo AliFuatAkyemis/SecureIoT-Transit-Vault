@@ -396,10 +396,9 @@ void updateOLED() {
 
   auto t = ArduinoCloud.getLocalTime();
   if (t != 0) {
-    struct tm *tm_info = localtime((time_t *)&t);
-    char timeBuf[9];                              // "HH:MM" = 5 chars, 30px
-    time_t localT = (time_t)t + 3 * 3600;          // UTC+3 Turkey
-    tm_info = localtime(&localT);
+    char timeBuf[9];
+    time_t localT = (time_t)t;
+    struct tm *tm_info = localtime(&localT);
     strftime(timeBuf, sizeof(timeBuf), "%H:%M", tm_info);
     oled.setCursor(49, 1);                        // center: (128-30)/2 ≈ 49
     oled.print(timeBuf);
