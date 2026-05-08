@@ -1,4 +1,27 @@
-.pio/
-.vscode/
+# Secrets — never commit
+arduino_secrets.h
+secrets.h
 include/secrets.h
+
+# Arduino IDE
+*.elf
+*.bin
+*.hex
+*.map
+build/
+
+# PlatformIO
+.pio/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*~
+
+# Claude Code
 .claude/
+
+# OS
+.DS_Store
+Thumbs.db

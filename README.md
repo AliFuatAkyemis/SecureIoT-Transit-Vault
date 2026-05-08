@@ -231,13 +231,23 @@ cd SecureIoT_Transit_Vault
 
 ### 3. `arduino_secrets.h` dosyasını oluştur
 
+Bu dosya `.gitignore`'da — repoda **bulunmaz**, her geliştirici kendisi oluşturur.
+
+Proje kök dizininde `arduino_secrets.h` adında yeni dosya oluştur:
+
 ```cpp
-#define SECRET_SSID          "WiFi-SSID"
-#define SECRET_OPTIONAL_PASS "WiFi-Sifresi"
-#define SECRET_DEVICE_KEY    "ARDUINO_CLOUD_DEVICE_KEY"
+#define SECRET_SSID          "WiFi-Ağ-Adı"
+#define SECRET_OPTIONAL_PASS "WiFi-Şifresi"
+#define SECRET_DEVICE_KEY    "Arduino-Cloud-Device-Key"
 ```
 
-> `arduino_secrets.h` `.gitignore`'da — asla commit'leme.
+**Değerleri nereden bulursun:**
+
+| Define | Kaynak |
+|---|---|
+| `SECRET_SSID` | Bağlanacağın WiFi ağının adı |
+| `SECRET_OPTIONAL_PASS` | WiFi şifresi (açık ağ ise boş bırak: `""`) |
+| `SECRET_DEVICE_KEY` | [Arduino Cloud](https://app.arduino.cc/) → Devices → cihazın → Secret Key |
 
 ### 4. Arduino IDE 2.x ile yükle
 
