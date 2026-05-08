@@ -1,6 +1,6 @@
 # 🔐 SecureIoT Transit Vault
 
-> ESP32 tabanlı, RFID kimlik doğrulamalı, fiziksel tamper-alarmlı ve Arduino IoT Cloud üzerinden uzaktan kontrol edilebilen taşınabilir akıllı kasa.
+> ESP32-based portable smart vault with RFID authentication, physical tamper alarm, and remote control via Arduino IoT Cloud.
 
 ![Platform](https://img.shields.io/badge/Platform-ESP32-blue)
 ![Cloud](https://img.shields.io/badge/Cloud-Arduino%20IoT-00979D)
@@ -10,56 +10,56 @@
 
 ---
 
-## 📑 İçindekiler
+## 📑 Table of Contents
 
-- [Genel Bakış](#-genel-bakış)
-- [Kullanım Senaryoları](#-kullanım-senaryoları)
-- [Sistem Mimarisi](#-sistem-mimarisi)
-- [Veri Akış Şeması](#-veri-akış-şeması)
-- [Durum Diyagramı](#-durum-diyagramı)
-- [Donanım](#-donanım)
-- [Pin Bağlantıları](#-pin-bağlantıları)
-- [Teknik Özellikler](#-teknik-özellikler)
-- [Kurulum](#-kurulum)
-- [Kullanım](#-kullanım)
-- [Cloud Değişkenleri](#-cloud-değişkenleri)
-- [Güvenlik Notu](#-güvenlik-notu)
-- [Lisans](#-lisans)
+- [Overview](#-overview)
+- [Use Cases](#-use-cases)
+- [System Architecture](#-system-architecture)
+- [Data Flow](#-data-flow)
+- [State Diagram](#-state-diagram)
+- [Hardware](#-hardware)
+- [Pin Connections](#-pin-connections)
+- [Technical Specifications](#-technical-specifications)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Cloud Variables](#-cloud-variables)
+- [Security Note](#-security-note)
+- [License](#-license)
 
 ---
 
-## 🎯 Genel Bakış
+## 🎯 Overview
 
-**SecureIoT Transit Vault**, taşıma sırasında içeriğin fiziksel bütünlüğünü koruyan ve uzaktan izlenebilen bir IoT kasa firmware'idir. Üç katmanlı bir savunma sunar:
+**SecureIoT Transit Vault** is an IoT vault firmware that protects the physical integrity of contents during transport and enables remote monitoring. It provides three layers of defense:
 
-| Katman | Mekanizma | Bileşen |
+| Layer | Mechanism | Component |
 |---|---|---|
-| 🪪 Kimlik | RFID UID eşleşmesi (MASTER + NVS-persisted) | MFRC522 |
-| 📐 Fiziksel | Darbe & ani rotasyon tespiti | MPU-6050 |
-| ☁️ Uzaktan | Cloud unlock / alarm reset / UID enroll | Arduino IoT Cloud (TLS) |
+| 🪪 Identity | RFID UID matching (MASTER + NVS-persisted) | MFRC522 |
+| 📐 Physical | Impact & sudden rotation detection | MPU-6050 |
+| ☁️ Remote | Cloud unlock / alarm reset / UID enroll | Arduino IoT Cloud (TLS) |
 
-**Kapatılan IoT zafiyetleri:**
+**Addressed IoT vulnerabilities:**
 
-- ❌ Hardcoded tek-faktör auth → ✅ NVS persist + cloud-tarafı UID enroll
-- ❌ Local-only alarm reset (fiziksel saldırgan susturur) → ✅ Latching alarm, sadece cloud `alarmReset` veya 5 sn sabitlik
-- ❌ Açıkta kalan sensör verisi → ✅ Cloud TLS üzerinden telemetri
-- ❌ Power-loss durumunda yetki kaybı → ✅ ESP32 NVS (`Preferences`) ile kalıcı UID
+- ❌ Hardcoded single-factor auth → ✅ NVS persist + cloud-side UID enroll
+- ❌ Local-only alarm reset (physical attacker can silence it) → ✅ Latching alarm, only cloud `alarmReset` or 5s stillness
+- ❌ Exposed sensor data → ✅ Telemetry over Cloud TLS
+- ❌ Auth loss on power failure → ✅ Persistent UID via ESP32 NVS (`Preferences`)
 
 ---
 
-## 💼 Kullanım Senaryoları
+## 💼 Use Cases
 
-| Senaryo | Fayda |
+| Scenario | Benefit |
 |---|---|
-| 🚚 Değerli kargo taşıma | Yol boyunca darbe / eğim eventleri cloud'a yansır |
-| 🏥 Numune / ilaç transferi | Mekanik stres trace edilir; UID ile yetki kontrolü |
-| 🏠 Akıllı ev gizli kasa | RFID + uzaktan unlock; alarm telefona gelir |
-| 🏭 Endüstriyel saha kit kutusu | Yetkili teknisyen kartı + uzaktan denetim |
-| 🎒 Kişisel veri / cüzdan kasası | Düşük maliyetli, açık kaynak |
+| 🚚 Valuable cargo transport | Impact / tilt events reflected to cloud throughout transit |
+| 🏥 Sample / medication transfer | Mechanical stress traced; access controlled by UID |
+| 🏠 Smart home safe | RFID + remote unlock; alarm notification on phone |
+| 🏭 Industrial field kit box | Authorized technician card + remote supervision |
+| 🎒 Personal data / wallet safe | Low cost, open source |
 
 ---
 
-## 🏗 Sistem Mimarisi
+## 🏗 System Architecture
 
 ```mermaid
 flowchart LR
@@ -92,30 +92,30 @@ flowchart LR
 
 ---
 
-## 🔄 Veri Akış Şeması
+## 🔄 Data Flow
 
 ```mermaid
 flowchart TD
     Start([loop start]) --> CU[ArduinoCloud.update]
     CU --> RM[readMotion]
     RM --> CalcG{"|G - 1g| > 1.5g\nor gyroRate > 400°/s?"}
-    CalcG -- evet --> Locked{"lockStatus\n== LOCKED?"}
-    Locked -- evet --> AlarmOn["triggerAlarm\nbuzzer HIGH\nlatched"]
-    Locked -- hayır --> Skip["ignore\nvault açık"]
-    CalcG -- hayır --> ClearChk{"alarm aktif &\n5s sabit?"}
-    ClearChk -- evet --> AutoClr[auto-clear alarm]
-    ClearChk -- hayır --> Pub
+    CalcG -- yes --> Locked{"lockStatus\n== LOCKED?"}
+    Locked -- yes --> AlarmOn["triggerAlarm\nbuzzer HIGH\nlatched"]
+    Locked -- no --> Skip["ignore\nvault open"]
+    CalcG -- no --> ClearChk{"alarm active &\n5s still?"}
+    ClearChk -- yes --> AutoClr[auto-clear alarm]
+    ClearChk -- no --> Pub
     AlarmOn --> Pub["publish telemetry\nangle, gForce, gyroRate"]
     Skip --> Pub
     AutoClr --> Pub
     Pub --> RR[readRFID]
-    RR --> Card{Yeni kart?}
-    Card -- hayır --> OL
-    Card -- evet --> Open{"lockStatus\n== UNLOCKED?"}
-    Open -- evet --> Enroll["saveEnrolled UID\n+ lockVault"]
-    Open -- hayır --> Auth{"isAuthorized?\nmaster OR enrolled"}
-    Auth -- evet --> Unlock["unlockVault\nservo 90°"]
-    Auth -- hayır --> Deny["buzzer 1s\ndenyBuzzerUntil"]
+    RR --> Card{New card?}
+    Card -- no --> OL
+    Card -- yes --> Open{"lockStatus\n== UNLOCKED?"}
+    Open -- yes --> Enroll["saveEnrolled UID\n+ lockVault"]
+    Open -- no --> Auth{"isAuthorized?\nmaster OR enrolled"}
+    Auth -- yes --> Unlock["unlockVault\nservo 90°"]
+    Auth -- no --> Deny["buzzer 1s\ndenyBuzzerUntil"]
     Enroll --> OL["updateOLED 500ms"]
     Unlock --> OL
     Deny --> OL
@@ -124,59 +124,59 @@ flowchart TD
 
 ---
 
-## 🎛 Durum Diyagramı
+## 🎛 State Diagram
 
 ```mermaid
 stateDiagram-v2
     [*] --> BOOT
     BOOT --> UNLOCKED : setup() unlockVault()
     UNLOCKED --> LOCKED : RFID tap (enroll)\nOR remoteUnlock toggle
-    LOCKED --> UNLOCKED : Yetkili RFID\nOR remoteUnlock toggle
+    LOCKED --> UNLOCKED : Authorized RFID\nOR remoteUnlock toggle
     LOCKED --> ALARM : G > 1.5g\nOR gyroRate > 400°/s
-    ALARM --> LOCKED : 5s sabit\nOR alarmReset (cloud)
-    ALARM --> UNLOCKED : Yetkili RFID\n(unlock alarmı sıfırlar)
-    LOCKED --> DENY : Yetkisiz UID
+    ALARM --> LOCKED : 5s still\nOR alarmReset (cloud)
+    ALARM --> UNLOCKED : Authorized RFID\n(unlock resets alarm)
+    LOCKED --> DENY : Unauthorized UID
     DENY --> LOCKED : 1s buzzer timeout
 
     note right of UNLOCKED
         servo = 90°
-        Sonraki kart tap = enroll
+        Next card tap = enroll
     end note
     note right of LOCKED
         servo = 0°
-        Motion guard aktif
+        Motion guard active
     end note
     note right of ALARM
         Buzzer latched HIGH
-        Sadece auto-clear (5s)
-        veya cloud alarmReset
+        Only auto-clear (5s)
+        or cloud alarmReset
     end note
 ```
 
 ---
 
-## 🔧 Donanım
+## 🔧 Hardware
 
-| Bileşen | Model | Arayüz |
+| Component | Model | Interface |
 |---|---|---|
 | MCU | ESP32 DOIT DevKit V1 | — |
-| RFID | MFRC522 | SPI (özel pinler) |
+| RFID | MFRC522 | SPI (custom pins) |
 | Motion | MPU-6050 | I2C @ 0x68 |
 | Display | SSD1306 128×64 OLED | I2C @ 0x3C |
 | Actuator | SG90 / MG90 servo | PWM |
-| Alarm | Aktif buzzer 5V | GPIO |
+| Alarm | Active buzzer 5V | GPIO |
 
-> ⚠️ **Not:** Bu kartta GPIO23 hatalı. SPI MOSI **GPIO32**'ye yönlendirildi.
+> ⚠️ **Note:** GPIO23 is faulty on this board. SPI MOSI was redirected to **GPIO32**.
 
 ---
 
-## 🔌 Pin Bağlantıları
+## 🔌 Pin Connections
 
-| Periferik | Sinyal | ESP32 GPIO |
+| Peripheral | Signal | ESP32 GPIO |
 |---|---|---|
 | OLED SSD1306 | SDA | 21 |
 | OLED SSD1306 | SCL | 22 |
-| MPU-6050 | SDA / SCL (paylaşımlı) | 21 / 22 |
+| MPU-6050 | SDA / SCL (shared) | 21 / 22 |
 | RFID MFRC522 | SS | 5 |
 | RFID MFRC522 | SCK | 14 |
 | RFID MFRC522 | MOSI | 32 |
@@ -185,111 +185,111 @@ stateDiagram-v2
 | Servo | Signal | 13 |
 | Buzzer | Signal | 12 |
 
-**Güç:** OLED / MPU / RFID = **3V3** · Servo / Buzzer = **5V** · Ortak GND.
+**Power:** OLED / MPU / RFID = **3V3** · Servo / Buzzer = **5V** · Common GND.
 
 ---
 
-## ⚙️ Teknik Özellikler
+## ⚙️ Technical Specifications
 
-| Parametre | Değer |
+| Parameter | Value |
 |---|---|
-| Dinamik G eşiği | `1.5 g` (sapma: `‖a‖ − 1g`) |
-| Açısal hız eşiği | `400 °/s` (gyro X ekseni) |
-| Açı dead-zone filtresi | `0.3 °` (gyro drift bastırma) |
-| Alarm auto-clear süresi | `5000 ms` sabit MPU |
-| OLED yenileme sıklığı | `500 ms` |
+| Dynamic G threshold | `1.5 g` (deviation: `‖a‖ − 1g`) |
+| Angular velocity threshold | `400 °/s` (gyro X axis) |
+| Angle dead-zone filter | `0.3 °` (gyro drift suppression) |
+| Alarm auto-clear duration | `5000 ms` still MPU |
+| OLED refresh rate | `500 ms` |
 | RFID debounce | `1000 ms` |
-| Telemetri publish | `1000 ms` |
-| UID kalıcılığı | ESP32 NVS — `Preferences(vault, uid)` |
-| Auth modeli | Master UID (compile-time) + 1 enrolled UID (runtime) |
+| Telemetry publish | `1000 ms` |
+| UID persistence | ESP32 NVS — `Preferences(vault, uid)` |
+| Auth model | Master UID (compile-time) + 1 enrolled UID (runtime) |
 | Cloud transport | Arduino IoT Cloud — MQTT over TLS 1.2 |
-| Baseline reset | `lockVault()` çağrısı veya `statsReset` cloud tetiği |
-| Servo konumları | `0°` = LOCKED · `90°` = OPEN |
+| Baseline reset | `lockVault()` call or `statsReset` cloud trigger |
+| Servo positions | `0°` = LOCKED · `90°` = OPEN |
 
 ---
 
-## 🚀 Kurulum
+## 🚀 Installation
 
-### 1. Kütüphaneler (Arduino Library Manager)
+### 1. Libraries (Arduino Library Manager)
 
-| Kütüphane | Sürüm |
+| Library | Version |
 |---|---|
 | Adafruit SSD1306 | 2.5.10 |
 | Adafruit GFX Library | 1.11.9 |
 | MFRC522 | 1.4.10 |
 | MPU6050_tockn | 1.0.2 |
 | ESP32Servo | 0.13.0 |
-| ArduinoIoTCloud | Arduino Cloud üzerinden |
-| Arduino_ConnectionHandler | Arduino Cloud üzerinden |
+| ArduinoIoTCloud | Via Arduino Cloud |
+| Arduino_ConnectionHandler | Via Arduino Cloud |
 
-### 2. Repo'yu klonla
+### 2. Clone the repo
 
 ```bash
-git clone https://github.com/<kullanici>/SecureIoT_Transit_Vault.git
+git clone https://github.com/<username>/SecureIoT_Transit_Vault.git
 cd SecureIoT_Transit_Vault
 ```
 
-### 3. `arduino_secrets.h` dosyasını oluştur
+### 3. Create `arduino_secrets.h`
 
-Bu dosya `.gitignore`'da — repoda **bulunmaz**, her geliştirici kendisi oluşturur.
+This file is in `.gitignore` — it is **not included** in the repo. Each developer creates it locally.
 
-Proje kök dizininde `arduino_secrets.h` adında yeni dosya oluştur:
+Create a new file named `arduino_secrets.h` in the project root:
 
 ```cpp
-#define SECRET_SSID          "WiFi-Ağ-Adı"
-#define SECRET_OPTIONAL_PASS "WiFi-Şifresi"
+#define SECRET_SSID          "Your-WiFi-Network-Name"
+#define SECRET_OPTIONAL_PASS "Your-WiFi-Password"
 #define SECRET_DEVICE_KEY    "Arduino-Cloud-Device-Key"
 ```
 
-**Değerleri nereden bulursun:**
+**Where to find each value:**
 
-| Define | Kaynak |
+| Define | Source |
 |---|---|
-| `SECRET_SSID` | Bağlanacağın WiFi ağının adı |
-| `SECRET_OPTIONAL_PASS` | WiFi şifresi (açık ağ ise boş bırak: `""`) |
-| `SECRET_DEVICE_KEY` | [Arduino Cloud](https://app.arduino.cc/) → Devices → cihazın → Secret Key |
+| `SECRET_SSID` | Name of the WiFi network to connect to |
+| `SECRET_OPTIONAL_PASS` | WiFi password (leave empty `""` for open networks) |
+| `SECRET_DEVICE_KEY` | [Arduino Cloud](https://app.arduino.cc/) → Devices → your device → Secret Key |
 
-### 4. Arduino IDE 2.x ile yükle
+### 4. Upload with Arduino IDE 2.x
 
 1. **Tools → Board** → *DOIT ESP32 DEVKIT V1*
-2. **Tools → Port** → ESP32 USB portu seç
-3. `SecureIoT_Transit_Vault.ino` dosyasını aç
+2. **Tools → Port** → select ESP32 USB port
+3. Open `SecureIoT_Transit_Vault.ino`
 4. **Upload** (→)
 
-### 5. Master UID'yi güncelle (opsiyonel)
+### 5. Update Master UID (optional)
 
 ```cpp
-// SecureIoT_Transit_Vault.ino satır 44
-const String MASTER_UID = "B9 2A 2D 40";  // kendi kartınla değiştir
+// SecureIoT_Transit_Vault.ino line 44
+const String MASTER_UID = "B9 2A 2D 40";  // replace with your own card
 ```
 
-**UID okuma:** Serial Monitor'ü **115200 baud** aç → kart okut → `[RFID] Card UID:` satırını kopyala.
+**Reading UID:** Open Serial Monitor at **115200 baud** → tap card → copy the `[RFID] Card UID:` line.
 
 ---
 
-## 🕹️ Kullanım
+## 🕹️ Usage
 
-### Fiziksel (yerel)
+### Physical (local)
 
-| Eylem | Sonuç |
+| Action | Result |
 |---|---|
-| Boot | Kasa **UNLOCKED** durumda başlar |
-| UNLOCKED iken kart okut | Kart **enroll** edilir → kasa **LOCK** |
-| LOCKED iken yetkili kart | **UNLOCK** + alarm sıfırlanır |
-| LOCKED iken yetkisiz kart | 1 saniye buzzer → DENY |
-| LOCKED iken darbe / ani rotasyon | **ALARM** (buzzer latched) |
-| 5 sn boyunca hareketsiz | Alarm otomatik kapanır |
+| Boot | Vault starts in **UNLOCKED** state |
+| Tap card while UNLOCKED | Card is **enrolled** → vault **LOCKS** |
+| Tap authorized card while LOCKED | **UNLOCK** + alarm reset |
+| Tap unauthorized card while LOCKED | 1-second buzzer → DENY |
+| Impact / sudden rotation while LOCKED | **ALARM** (buzzer latched) |
+| 5 seconds of stillness | Alarm clears automatically |
 
-### Uzaktan (Arduino IoT Cloud Dashboard)
+### Remote (Arduino IoT Cloud Dashboard)
 
-| Değişken | Tip | Eylem |
+| Variable | Type | Action |
 |---|---|---|
-| `remoteUnlock` | bool toggle | Kilit durumunu çevirir + alarm sıfırlar |
-| `alarmReset` | bool toggle | Latched buzzer'ı durdurur |
-| `authorizedUidInput` | String | Yeni enrolled UID gir (kasa LOCKED iken) |
-| `statsReset` | bool toggle | Hareket istatistiklerini sıfırlar, baseline günceller |
+| `remoteUnlock` | bool toggle | Toggles lock state + resets alarm |
+| `alarmReset` | bool toggle | Stops latched buzzer |
+| `authorizedUidInput` | String | Enter new enrolled UID (while vault is LOCKED) |
+| `statsReset` | bool toggle | Resets motion statistics, updates baseline |
 
-**`authorizedUidInput` desteklenen UID formatları:**
+**`authorizedUidInput` supported UID formats:**
 
 ```
 A1B2C3D4
@@ -297,44 +297,44 @@ a1:b2:c3:d4
 A1 B2 C3 D4
 ```
 
-4 / 7 / 10 byte (8 / 14 / 20 hex karakter) kabul edilir; geçersiz format sessizce reddedilir.
+4 / 7 / 10 byte (8 / 14 / 20 hex characters) accepted; invalid formats are silently rejected.
 
 ---
 
-## ☁️ Cloud Değişkenleri
+## ☁️ Cloud Variables
 
-| Değişken | Yön | Tip | Açıklama |
+| Variable | Dir | Type | Description |
 |---|---|---|---|
-| `angle` | R | float | Filtreli ivmemetre tabanlı X açısı (°) |
-| `gForce` | R | float | Dinamik sarsıntı: `‖a‖ − 1g` |
-| `gyroRate` | R | float | Anlık açısal hız `|gyro X|` (°/s) |
+| `angle` | R | float | Filtered accelerometer-based X angle (°) |
+| `gForce` | R | float | Dynamic impact: `‖a‖ − 1g` |
+| `gyroRate` | R | float | Instantaneous angular velocity `|gyro X|` (°/s) |
 | `lockStatus` | R | bool | `true` = UNLOCKED |
-| `rfidUID` | R | String | Son okunan kart UID |
-| `remoteUnlock` | RW | bool | Rising edge → kilit toggle |
-| `alarmReset` | RW | bool | Rising edge → buzzer kapat |
-| `authorizedUidInput` | RW | String | Cloud üzerinden kart enroll |
-| `statsReset` | RW | bool | Stats + baseline sıfırla |
-| `shakeAvg` / `shakeMax` | R | float | Sarsıntı G ortalaması / maksimumu |
-| `tiltAbsAvg` / `tiltAbsMax` | R | float | Mutlak eğim ortalaması / maksimumu |
-| `tiltRelAvg` / `tiltRelMax` | R | float | Baseline'a göreli eğim ortalaması / maksimumu |
+| `rfidUID` | R | String | Last read card UID |
+| `remoteUnlock` | RW | bool | Rising edge → lock toggle |
+| `alarmReset` | RW | bool | Rising edge → silence buzzer |
+| `authorizedUidInput` | RW | String | Cloud-side card enroll |
+| `statsReset` | RW | bool | Reset stats + baseline |
+| `shakeAvg` / `shakeMax` | R | float | Shake G average / maximum |
+| `tiltAbsAvg` / `tiltAbsMax` | R | float | Absolute tilt average / maximum |
+| `tiltRelAvg` / `tiltRelMax` | R | float | Baseline-relative tilt average / maximum |
 
 ---
 
-## 🛡️ Güvenlik Notu
+## 🛡️ Security Note
 
-Bu firmware **fiziksel tamper alarmı + cloud TLS iletişimi** sağlar. **On-device kriptografik anahtar saklama veya ESP32 secure-boot içermez.**
+This firmware provides **physical tamper alarm + cloud TLS communication**. It does **not** include on-device cryptographic key storage or ESP32 secure-boot.
 
-MFRC522 RFID okuyucu, yaygın MIFARE Classic kartlarla kullanıldığında UID klonlamaya karşı savunmasızdır. Yüksek güvenlik gerektiren ortamlarda tek savunma hattı olarak kullanılmamalıdır.
+The MFRC522 RFID reader is vulnerable to UID cloning when used with common MIFARE Classic cards. It should not be used as the sole line of defense in high-security environments.
 
-**Üretim ortamı için öneriler:**
+**Recommendations for production:**
 
-- ESP32 **flash encryption + secure boot v2** etkinleştir
-- `arduino_secrets.h` dosyasını git'e commit'leme (`.gitignore`'da zaten mevcut)
-- Master UID'yi periyodik olarak rotate et
-- MIFARE Classic yerine DESFire EV2 / NTAG424 DNA gibi şifreli kart teknolojileri kullan
+- Enable ESP32 **flash encryption + secure boot v2**
+- Never commit `arduino_secrets.h` to git (already in `.gitignore`)
+- Rotate Master UID periodically
+- Use encrypted card technologies such as DESFire EV2 / NTAG424 DNA instead of MIFARE Classic
 
 ---
 
-## 📜 Lisans
+## 📜 License
 
 [MIT License](LICENSE) — © 2026 alifuatakyemis
